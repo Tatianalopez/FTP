@@ -1,55 +1,48 @@
 package com.alianza.lib.clientesftp;
 
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.log;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Autowired;
+
+import com.alianza.lib.clientesftp.impl.IGestionArchivos;
+import com.alianza.lib.clientesftp.impl.IValidacionArchivos;
 import com.alianza.lib.excepciones.CustomApplicationException;
 import com.alianza.lib.excepciones.CustomRuntimeException;
 import com.alianza.lib.pool.ConexionPool;
-import com.alianza.lib.utilitarios.ConstantesCoreUtil.ConstantesFTP;
-import com.alianza.lib.utilitarios.HelperUtil;
+import com.alianza.lib.utilitarios.ConstantesCoreUtil.ConstantesConexionFTP;
 import com.alianza.lib.utilitarios.Logs;
-import com.alianza.lib.utilitarios.PropertiesUtil;
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.SftpException;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class GestionArchivoSFTP {
+public class GestionArchivoSFTP implements IGestionArchivos {
 
 	private final ConexionPool conexionPool;
 	
+	@Autowired
+	private IValidacionArchivos validateFile;
+
 	public GestionArchivoSFTP(ConexionPool conexionPool) {
 		this.conexionPool = conexionPool;
 	}
-	
-	private static final String CONST_CONEXION_OBTENIDA = "Se obtiene conexión servidor SFTP";
-	private static final String CONST_CONEXION_DEVUELTA = "Se devuelve conexión servidor SFTP";
-	private static final String CONST_LOCAL_TEXTO = " local: ";
-	private static final String CONST_REMOTO_TEXTO = " remoto: ";
-	/**
-	 * trae un archivo del ftp
-	 *
-	 * @param remoto: ruta del servidor remoto
-	 * @return InputStream
-	 */
+
+	@Override
 	public synchronized InputStream getFTP(String remoto) {
 		log.info("Inicia InputStream getFTP. remoto: " + remoto);
 		ByteArrayOutputStream bao = new ByteArrayOutputStream();
-		String remotoCompleto = this.obtenerRutaBase() + remoto;
+		String remotoCompleto = validateFile.obtenerRutaBase() + remoto;
 		ChannelSftp channelSftp = this.conexionPool.getBorrowObject();
-		log.info(CONST_CONEXION_OBTENIDA);
+		log.info(ConstantesConexionFTP.CONST_CONEXION_OBTENIDA);
 		try {
 			InputStream in = channelSftp.get(remotoCompleto);
-			log.info("InputStream getFTP. Descarga de archivo del STFP satisfactoriamente. in:" + in + " remotoCompleto: "
-					+ remotoCompleto);
+			log.info("InputStream getFTP. Descarga de archivo del STFP satisfactoriamente. in:" + in
+					+ " remotoCompleto: " + remotoCompleto);
 			byte[] buff = new byte[8000];
 			int bytesRead;
 			while ((bytesRead = in.read(buff)) != -1) {
@@ -67,25 +60,18 @@ public class GestionArchivoSFTP {
 			throw new CustomRuntimeException(e.getMessage());
 		} finally {
 			this.conexionPool.returnObject(channelSftp);
-			log.info(CONST_CONEXION_DEVUELTA);
+			log.info(ConstantesConexionFTP.CONST_CONEXION_DEVUELTA);
 			log.info("Fin InputStream getFTP.");
 		}
 	}
 
-	/**
-	 * Sube un archivo al FTP, el archivo a subir se encuentra almacenado en memoria
-	 * en un InputStream
-	 *
-	 * @param remoto    String con la ruta de almacenamiento del archivo
-	 * @param enMemoria InputStream con la información del archivo a subir
-	 * @return Entrega true si el proceso es exitoso
-	 */
+	@Override
 	public synchronized boolean putFTP(String remoto, InputStream enMemoria) throws CustomApplicationException {
-		log("Inicia boolean putFTP. remoto: " + remoto + " enMemoria: " + enMemoria, CONST_INFO_LOG);
-		remoto = this.obtenerRutaBase() + remoto;
+		log.info("Inicia boolean putFTP. remoto: " + remoto + " enMemoria: " + enMemoria);
+		remoto = validateFile.obtenerRutaBase() + remoto;
 		remoto = remoto.replace("\\", "/");
 		ChannelSftp channelSftp = this.conexionPool.getBorrowObject();
-		log.info(CONST_CONEXION_OBTENIDA);
+		log.info(ConstantesConexionFTP.CONST_CONEXION_OBTENIDA);
 		log.info("boolean putFTP. remoto: " + remoto);
 		try {
 			channelSftp.put(enMemoria, remoto);
@@ -97,96 +83,74 @@ public class GestionArchivoSFTP {
 			throw new CustomApplicationException(e.getMessage());
 		} finally {
 			this.conexionPool.returnObject(channelSftp);
-			log.info(CONST_CONEXION_DEVUELTA);
+			log.info(ConstantesConexionFTP.CONST_CONEXION_DEVUELTA);
 			log.info("Fin boolean putFTP");
 		}
 	}
 
-	/**
-	 * Elimina el archivo del FTP siempre y cuando la ruta a eliminar se de un
-	 * archivo y no de directorio
-	 *
-	 * @param rutaArchivo String con la ruta de almacenamiento del archivo
-	 * @return Entrega true si el proceso es exitoso
-	 */
+	@Override
 	public synchronized boolean deleteArchivoDelFTP(String rutaArchivo) throws CustomApplicationException {
-		log("Inicia boolean deleteArchivoDelFTP. rutaArchivo: " + rutaArchivo, CONST_INFO_LOG);
+		log.info("Inicia boolean deleteArchivoDelFTP. rutaArchivo: " + rutaArchivo);
 		ChannelSftp channelSftp = this.conexionPool.getBorrowObject();
-		log(CONST_CONEXION_OBTENIDA, CONST_INFO_LOG);
+		log.info(ConstantesConexionFTP.CONST_CONEXION_OBTENIDA);
 		try {
-			rutaArchivo = this.obtenerRutaBase() + rutaArchivo;
-			if (comprobarSiLaRutaEsUnArchivo(rutaArchivo) && existsSFTPRemoteFileOrDirectory(rutaArchivo)) {
+			rutaArchivo = validateFile.obtenerRutaBase() + rutaArchivo;
+			if (validateFile.comprobarSiLaRutaEsUnArchivo(rutaArchivo) && existsSFTPRemoteFileOrDirectory(rutaArchivo)) {
 				channelSftp.rm(rutaArchivo);
-				log("boolean deleteArchivoDelFTP. Archivo eliminado correctamente. rutaArchivo: " + rutaArchivo,
-						CONST_INFO_LOG);
+				log.info("boolean deleteArchivoDelFTP. Archivo eliminado correctamente. rutaArchivo: " + rutaArchivo);
 			} else {
-				log("boolean deleteArchivoDelFTP. No fue posible encontrar el archivo que intenta eliminar en la ruta especificada: "
-						+ rutaArchivo, CONST_ERROR_LOG);
+				log.error(
+						"boolean deleteArchivoDelFTP. No fue posible encontrar el archivo que intenta eliminar en la ruta especificada: "
+								+ rutaArchivo);
 				throw new SftpException(ChannelSftp.SSH_FX_NO_SUCH_FILE,
 						"No fue posible encontrar el archivo que intenta eliminar en la ruta especificada.");
 			}
 			return true;
 		} catch (Exception e) {
-			log("boolean deleteArchivoDelFTP. Exception e. Error en eliminación archivo. e.getMessage(): "
-					+ e.getMessage(), CONST_ERROR_LOG);
-			Logs.error(e);
+			log.error("boolean deleteArchivoDelFTP. Exception e. Error en eliminación archivo. e.getMessage(): "
+					+ e.getMessage());
+			log.error(e.getMessage());
 			throw new CustomApplicationException(e.getMessage());
 		} finally {
 			this.conexionPool.returnObject(channelSftp);
-			log(CONST_CONEXION_DEVUELTA, CONST_INFO_LOG);
-			log("Fin boolean deleteArchivoDelFTP.", CONST_INFO_LOG);
+			log.info(ConstantesConexionFTP.CONST_CONEXION_DEVUELTA);
+			log.info("Fin boolean deleteArchivoDelFTP.");
 		}
 	}
 
-	/**
-	 * Método para obtener lista de archivos en una ruta específica
-	 */
-	@SuppressWarnings("unchecked")
-	private synchronized void lsFolderCopy(String remoto, String local) throws Exception {
-		log("Inicia void lsFolderCopy. remoto: " + remoto + CONST_LOCAL_TEXTO + local, CONST_INFO_LOG);
+	@Override
+	public synchronized boolean existsSFTPRemoteFileOrDirectory(String currentPath) {
+		log.info("Inicia boolean existsSFTPRemoteFileOrDirectory. currentPath: " + currentPath);
+		boolean ackExists = false;
 		ChannelSftp channelSftp = this.conexionPool.getBorrowObject();
-		log(CONST_CONEXION_OBTENIDA, CONST_INFO_LOG);
+		log.info(ConstantesConexionFTP.CONST_CONEXION_OBTENIDA);
 		try {
-			List<ChannelSftp.LsEntry> directories = new ArrayList<>(channelSftp.ls(remoto));
-			log("void lsFolderCopy. Se obtiene información del directorio. directories: " + directories,
-					CONST_INFO_LOG);
-			if (HelperUtil.isNullOrEmpty(directories)) {
-				log("void lsFolderCopy. HelperUtil.isNullOrEmpty(directories): " + HelperUtil.isNullOrEmpty(directories)
-						+ CONST_REMOTO_TEXTO + remoto, CONST_ERROR_LOG);
-				throw new CustomApplicationException(
-						"void lsFolderCopy. Error de comunicación con el FTP :: directorio vacío :: ", remoto);
+			@SuppressWarnings("unchecked")
+			List<ChannelSftp.LsEntry> lsCmdResults = new ArrayList<>(channelSftp.ls(currentPath));
+			log.info("boolean existsSFTPRemoteFileOrDirectory. Se obtiene información del path. lsCmdResults: "
+					+ lsCmdResults);
+			ackExists = !lsCmdResults.isEmpty();
+		} catch (SftpException e) {
+			log.error("boolean existsSFTPRemoteFileOrDirectory. SftpException e. e.getMessage(): " + e.getMessage());
+			log.error(e.getMessage());
+			if (e.id == ChannelSftp.SSH_FX_NO_SUCH_FILE) {
+				log.error(
+						"boolean existsSFTPRemoteFileOrDirectory. No se encontró el archivo en la ruta especificada.");
+			} else {
+				log.error(
+						"boolean existsSFTPRemoteFileOrDirectory. Error inesperado al ejecutar comando remoto ls en sftp: [{}:{}]",
+						e.id, e.getMessage());
 			}
-			for (ChannelSftp.LsEntry oListItem : directories) {
-				if (!oListItem.getAttrs().isDir()) {
-					new File(local + oListItem.getFilename());
-					channelSftp.get(remoto + oListItem.getFilename(), local + oListItem.getFilename());
-					log("void lsFolderCopy. Descarga de archivo del STFP. local: " + local
-							+ " oListItem.getFilename(): " + oListItem.getFilename() + CONST_REMOTO_TEXTO + remoto,
-							CONST_INFO_LOG);
-				} else if (!".".equals(oListItem.getFilename()) && !"..".equals(oListItem.getFilename())) {
-					final boolean mkdirs = new File(local + oListItem.getFilename()).mkdirs();
-					log("void lsFolderCopy. Crea directorio. mkdirs: " + mkdirs + CONST_LOCAL_TEXTO + local
-							+ " oListItem.getFilename(): " + oListItem.getFilename() + CONST_REMOTO_TEXTO + remoto,
-							CONST_INFO_LOG);
-					lsFolderCopy(remoto + oListItem.getFilename(), local + oListItem.getFilename());
-				}
-			}
+		} catch (Exception e) {
+			log.error("boolean existsSFTPRemoteFileOrDirectory. Exception e. e.getMessage(): " + e.getMessage());
+			log.error(e.getMessage());
 		} finally {
 			this.conexionPool.returnObject(channelSftp);
-			log(CONST_CONEXION_DEVUELTA, CONST_INFO_LOG);
-			log("Fin void lsFolderCopy.", CONST_INFO_LOG);
+			log.info(ConstantesConexionFTP.CONST_CONEXION_DEVUELTA);
 		}
-	}
-	
-	/**
-	 * Obtener ruta base FTP
-	 *
-	 * @return String
-	 */
-	public String obtenerRutaBase() {
-		log("Inicia - Fin String obtenerRutaBase(). PropertiesUtil.obtenerPropiedad(ConstantesFTP.CONST_FTP_HOME: "
-				+ PropertiesUtil.obtenerPropiedad(ConstantesFTP.CONST_FTP_HOME), CONST_INFO_LOG);
-		return PropertiesUtil.obtenerPropiedad(ConstantesFTP.CONST_FTP_HOME);
+		log.info("Fin boolean existsSFTPRemoteFileOrDirectory ackExists: " + ackExists);
+		return ackExists;
+
 	}
 
 }

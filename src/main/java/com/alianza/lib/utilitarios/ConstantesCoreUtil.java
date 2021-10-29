@@ -6,7 +6,12 @@ public class ConstantesCoreUtil {
 	public static final String KEY_PATH_PROPERTIES_OFV = "path.app";
 	public static final String KEY_FILE_PROPERTIES_OFV = "file.app";
 
-	
+	public static class ConstantesConexionFTP {
+
+		public static final String CONST_CONEXION_OBTENIDA = "Se obtiene conexión servidor SFTP";
+		public static final String CONST_CONEXION_DEVUELTA = "Se devuelve conexión servidor SFTP";
+	}
+
 	public static class ConstantesFTP {
 
 		public static final String CONST_SERVER = "sftp.serverftp";
@@ -46,7 +51,7 @@ public class ConstantesCoreUtil {
 		public static final String CONST_TESTONRETURN = "testOnReturn";
 		public static final String CONST_TESTONBORROW = "testOnBorrow";
 	}
-	
+
 	public static class ConstantesSimbolos {
 		public static final String GUION = "-";
 		public static final String GUION_BAJO = "_";

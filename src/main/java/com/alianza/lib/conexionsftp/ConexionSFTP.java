@@ -1,5 +1,12 @@
 package com.alianza.lib.conexionsftp;
 
+import java.util.Properties;
+
+import org.apache.commons.pool2.BasePooledObjectFactory;
+import org.apache.commons.pool2.PooledObject;
+import org.apache.commons.pool2.impl.DefaultPooledObject;
+import org.springframework.beans.factory.annotation.Autowired;
+
 import com.alianza.lib.configs.SFTPConfigProperties;
 import com.alianza.lib.excepciones.CustomApplicationException;
 import com.alianza.lib.excepciones.CustomRuntimeException;
@@ -10,14 +17,6 @@ import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
-import org.apache.commons.pool2.BasePooledObjectFactory;
-import org.apache.commons.pool2.PooledObject;
-import org.apache.commons.pool2.impl.DefaultPooledObject;
-import org.springframework.beans.factory.annotation.Autowired;
-
-import java.util.Properties;
 
 /**
  * Clase para crear conexión al servidor SFTP
